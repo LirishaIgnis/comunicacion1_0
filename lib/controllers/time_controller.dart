@@ -31,7 +31,7 @@ class TimeController extends ChangeNotifier {
   void reiniciarTiempo(GameController gameController) {
     _timer?.cancel();
     _timer = null;
-    gameController.reiniciarMarcadores();
+    gameController.reiniciarMarcadoresYTiempo();
     notifyListeners();
   }
 

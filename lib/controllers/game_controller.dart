@@ -54,10 +54,12 @@ class GameController extends ChangeNotifier {
     _actualizarTrama();
   }
 
-  /// **Reiniciar los marcadores sin cambiar el periodo**
-  void reiniciarMarcadores() {
+  /// **Reiniciar marcadores y también el reloj sin afectar el periodo**
+  void reiniciarMarcadoresYTiempo() {
     _gameState.marcadorLocal = 0;
     _gameState.marcadorVisitante = 0;
+    _gameState.minutos = 0;
+    _gameState.segundos = 0;
     notifyListeners();
     _actualizarTrama();
   }

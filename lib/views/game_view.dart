@@ -137,7 +137,7 @@ class GameView extends StatelessWidget {
   }
 
   /// Botones para controlar el reloj
-  Widget _buildTimeControlButtons(TimeController timeController, GameController gameController) {
+ Widget _buildTimeControlButtons(TimeController timeController, GameController gameController) {
   return Row(
     mainAxisAlignment: MainAxisAlignment.center,
     children: [
@@ -164,7 +164,7 @@ class GameView extends StatelessWidget {
       ),
       SizedBox(width: 15),
       ElevatedButton(
-        onPressed: gameController.reiniciarMarcadores,
+        onPressed: gameController.reiniciarMarcadoresYTiempo,
         child: Text("Reiniciar", style: TextStyle(fontSize: 20)),
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.red,
@@ -176,6 +176,7 @@ class GameView extends StatelessWidget {
     ],
   );
 }
+
 
 
   /// Botón de Bluetooth con texto y un ícono
