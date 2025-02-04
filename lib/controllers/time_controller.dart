@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../core/bluetooth_service.dart';
@@ -27,7 +28,7 @@ class TimeController extends ChangeNotifier {
     _timer = null;
   }
 
-  /// **Ahora "Reiniciar" pone en 0 el tiempo, periodo y marcadores**
+  /// **Reiniciar pone en 0 el tiempo y los marcadores (sin afectar el periodo)**
   void reiniciarTiempo(GameController gameController) {
     _timer?.cancel();
     _timer = null;
@@ -46,9 +47,9 @@ class TimeController extends ChangeNotifier {
     }
 
     notifyListeners();
-    
-    // Generar y enviar la trama con el tiempo actualizado
-    List<int> trama = _gameState.generarTramaEstadoPartido(_bitOscilacion ? 6 : 2);
+
+    // Generar la trama correctamente codificada y enviarla como Uint8List
+    Uint8List trama = _gameState.generarTramaEstadoPartido(_bitOscilacion ? 6 : 2);
     _bluetoothService.enviarTrama(trama);
   }
 }

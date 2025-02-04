@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../core/app_routes.dart';
@@ -16,7 +17,7 @@ class _HomeViewState extends State<HomeView> {
     final bluetoothService = Provider.of<BluetoothService>(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text("Comunicacion Bluetooth")),
+      appBar: AppBar(title: Text("Comunicación Bluetooth")),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -46,7 +47,9 @@ class _HomeViewState extends State<HomeView> {
             SizedBox(height: 10),
             ElevatedButton(
               onPressed: () {
-                bluetoothService.enviarMensaje(_textController.text);
+                // Convertimos el texto a Uint8List antes de enviarlo
+                Uint8List mensajeEnBytes = Uint8List.fromList(_textController.text.codeUnits);
+                bluetoothService.enviarTrama(mensajeEnBytes);
                 _textController.clear();
               },
               child: Text("Enviar Mensaje"),
@@ -57,5 +60,6 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 }
+
 
 

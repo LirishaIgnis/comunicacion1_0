@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../models/game_state.dart';
 import '../core/bluetooth_service.dart';
@@ -13,7 +14,9 @@ class GameController extends ChangeNotifier {
 
   void _actualizarTrama() {
     _bitOscilacion = !_bitOscilacion; // Alternar entre 6 y 2
-    List<int> trama = _gameState.generarTramaEstadoPartido(_bitOscilacion ? 6 : 2);
+
+    // Generar la trama correctamente codificada y enviarla
+    Uint8List trama = _gameState.generarTramaEstadoPartido(_bitOscilacion ? 6 : 2);
     _bluetoothService.enviarTrama(trama);
   }
 
