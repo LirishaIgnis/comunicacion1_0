@@ -8,6 +8,7 @@ class BluetoothService extends ChangeNotifier {
   bool _isConnected = false;
   bool _bluetoothEnabled = false;
   bool _permissionsGranted = false;
+  BluetoothDevice? _dispositivoConectado;
 
   bool get isConnected => _isConnected;
   bool get bluetoothEnabled => _bluetoothEnabled;
@@ -30,19 +31,42 @@ class BluetoothService extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// **Obtiene los dispositivos emparejados**
+  Future<List<BluetoothDevice>> obtenerDispositivosEmparejados() async {
+    return await FlutterBluetoothSerial.instance.getBondedDevices();
+  }
+
+  /// **Verifica si un dispositivo específico está conectado**
+  bool estaConectado(BluetoothDevice dispositivo) {
+    return _isConnected && _dispositivoConectado?.address == dispositivo.address;
+  }
+
+  /// **Conecta o desconecta un dispositivo según su estado actual**
+  Future<void> conectarODesconectar(BluetoothDevice dispositivo) async {
+    if (estaConectado(dispositivo)) {
+      desconectar();
+    } else {
+      await conectarDispositivo(dispositivo);
+    }
+  }
+
+  /// **Conecta un dispositivo Bluetooth**
   Future<void> conectarDispositivo(BluetoothDevice device) async {
     try {
       _connection = await BluetoothConnection.toAddress(device.address);
+      _dispositivoConectado = device;
       _isConnected = true;
       notifyListeners();
       print('Conectado a ${device.name}');
     } catch (e) {
       _isConnected = false;
+      _dispositivoConectado = null;
       notifyListeners();
       print('Error al conectar: $e');
     }
   }
 
+  /// **Envía la trama de datos**
   void enviarTrama(Uint8List trama) {
     if (_connection != null && _connection!.isConnected) {
       _connection!.output.add(trama);
@@ -54,10 +78,12 @@ class BluetoothService extends ChangeNotifier {
     }
   }
 
+  /// **Desconecta el dispositivo Bluetooth**
   void desconectar() {
     _connection?.close();
     _connection = null;
     _isConnected = false;
+    _dispositivoConectado = null;
     notifyListeners();
     print("Desconectado de Bluetooth");
   }

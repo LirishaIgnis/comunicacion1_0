@@ -1,10 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:provider/provider.dart';
 import '../controllers/game_controller.dart';
 import '../controllers/time_controller.dart';
 import '../core/bluetooth_service.dart';
+import 'home_view.dart';  // Asegúrate de importar la vista de Home si aún no está
 
-class GameView extends StatelessWidget {
+class GameView extends StatefulWidget {
+  @override
+  _GameViewState createState() => _GameViewState();
+}
+
+class _GameViewState extends State<GameView> {
+  BluetoothDevice? _selectedDevice;
+  List<BluetoothDevice> _devices = [];
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPairedDevices();
+  }
+
+  Future<void> _fetchPairedDevices() async {
+    final devices = await FlutterBluetoothSerial.instance.getBondedDevices();
+    setState(() {
+      _devices = devices;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final gameController = Provider.of<GameController>(context);
@@ -12,47 +36,31 @@ class GameView extends StatelessWidget {
     final bluetoothService = Provider.of<BluetoothService>(context);
 
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         backgroundColor: Colors.blueGrey[900],
         title: Text("Marcador", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         centerTitle: true,
+        leading: IconButton(
+          icon: Icon(Icons.menu, size: 30),
+          onPressed: () {
+            _scaffoldKey.currentState?.openDrawer();
+          },
+        ),
       ),
+      drawer: _buildBluetoothMenu(bluetoothService),
       backgroundColor: Colors.grey[900],
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Sección de botones de Bluetooth
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildBluetoothButton("Verificar", Icons.check_circle, Colors.blue, () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(bluetoothService.isConnected
-                          ? "Bluetooth conectado"
-                          : "Bluetooth no conectado"),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }),
-                _buildBluetoothButton("Conectar", Icons.bluetooth, Colors.green, () {
-                  // Aquí iría la lógica para seleccionar y conectar un dispositivo Bluetooth
-                }),
-                _buildBluetoothButton("Desconectar", Icons.bluetooth_disabled, Colors.red, bluetoothService.desconectar),
-              ],
-            ),
-            SizedBox(height: 20),
-
             // Sección del reloj (Tiempo)
             Text(
               "${timeController.gameState.minutos}:${timeController.gameState.segundos.toString().padLeft(2, '0')}",
               style: TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: Colors.white),
             ),
             SizedBox(height: 30),
-
-            // Sección de Marcadores, Periodo y Faltas
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
@@ -75,7 +83,7 @@ class GameView extends StatelessWidget {
                       ElevatedButton(
                         onPressed: () {
                           gameController.cambiarPeriodo();
-                          timeController.reiniciarTiempo(gameController); // Reinicia el tiempo al cambiar el periodo
+                          timeController.reiniciarTiempo(gameController);
                         },
                         child: Text("Siguiente", style: TextStyle(fontSize: 20)),
                         style: ElevatedButton.styleFrom(
@@ -100,8 +108,6 @@ class GameView extends StatelessWidget {
               ],
             ),
             SizedBox(height: 20),
-
-            // Sección de control de faltas
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -126,16 +132,73 @@ class GameView extends StatelessWidget {
               ],
             ),
             SizedBox(height: 30),
-
-            // Botones de control del reloj
             _buildTimeControlButtons(timeController, gameController),
+          ],
+        ),
+      ),
+      // FloatingActionButton para regresar al Home
+      floatingActionButton: FloatingActionButton(
+        heroTag: "homeButton",  // Importante para evitar conflictos de hero animations
+        onPressed: () {
+          Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeView()));
+        },
+        backgroundColor: Colors.blue,
+        child: Icon(Icons.home, size: 30),
+      ),
+    );
+  }
+
+  Widget _buildBluetoothMenu(BluetoothService bluetoothService) {
+    return Drawer(
+      child: Container(
+        color: Colors.blueGrey[800],
+        padding: EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Dispositivos Bluetooth",
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 10),
+            DropdownButtonFormField<BluetoothDevice>(
+              dropdownColor: Colors.grey[850],
+              value: _selectedDevice,
+              items: _devices.map((device) {
+                return DropdownMenuItem(
+                  value: device,
+                  child: Text(device.name ?? "Desconocido", style: TextStyle(color: Colors.white)),
+                );
+              }).toList(),
+              onChanged: (device) {
+                setState(() {
+                  _selectedDevice = device;
+                });
+              },
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.grey[700],
+                labelText: "Seleccionar dispositivo",
+                labelStyle: TextStyle(color: Colors.white),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _selectedDevice != null
+                  ? () => bluetoothService.conectarODesconectar(_selectedDevice!)
+                  : null,
+              child: Text(bluetoothService.isConnected ? "Desconectar" : "Conectar",
+                  style: TextStyle(fontSize: 18)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: bluetoothService.isConnected ? Colors.red : Colors.green,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  /// Widget para mostrar el marcador de cada equipo con sus botones
   Widget _buildScoreColumn(String label, int score, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
     return Column(
       children: [
@@ -173,7 +236,6 @@ class GameView extends StatelessWidget {
     );
   }
 
-  /// Widget para mostrar y modificar las faltas
   Widget _buildFoulsColumn(String label, int fouls, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
     return Column(
       children: [
@@ -211,7 +273,6 @@ class GameView extends StatelessWidget {
     );
   }
 
-  /// Botones para controlar el reloj
   Widget _buildTimeControlButtons(TimeController timeController, GameController gameController) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -249,21 +310,6 @@ class GameView extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  /// Botón de Bluetooth con texto y un ícono
-  Widget _buildBluetoothButton(String label, IconData icon, Color color, VoidCallback onPressed) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 30),
-      label: Text(label, style: TextStyle(fontSize: 20)),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: color,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-      ),
     );
   }
 }
