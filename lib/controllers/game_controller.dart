@@ -12,6 +12,7 @@ class GameController extends ChangeNotifier {
 
   GameState get gameState => _gameState;
 
+  /// **Actualiza y envía la trama estándar**
   void _actualizarTrama() {
     _bitOscilacion = !_bitOscilacion; // Alternar entre 6 y 2
 
@@ -20,6 +21,15 @@ class GameController extends ChangeNotifier {
     _bluetoothService.enviarTrama(trama);
   }
 
+  /// **Genera y envía la trama de faltas tomando los datos actuales del estado del juego**
+  void _enviarTramaFaltas() {
+    Uint8List tramaFaltas = _gameState.generarTramaFaltas(
+      bitOscilacion: _bitOscilacion ? 6 : 2,
+    );
+    _bluetoothService.enviarTrama(tramaFaltas);
+  }
+
+  // *** Funciones para modificar el marcador ***
   void aumentarMarcadorLocal() {
     _gameState.marcadorLocal++;
     notifyListeners();
@@ -48,7 +58,36 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  /// **Cuando cambia el periodo, el tiempo vuelve a 0:00**
+  // *** Funciones para modificar las faltas y enviar la trama de faltas ***
+  void aumentarFaltasLocal() {
+    _gameState.faltasLocal++;
+    notifyListeners();
+    _enviarTramaFaltas();
+  }
+
+  void disminuirFaltasLocal() {
+    if (_gameState.faltasLocal > 0) {
+      _gameState.faltasLocal--;
+      notifyListeners();
+      _enviarTramaFaltas();
+    }
+  }
+
+  void aumentarFaltasVisitante() {
+    _gameState.faltasVisitante++;
+    notifyListeners();
+    _enviarTramaFaltas();
+  }
+
+  void disminuirFaltasVisitante() {
+    if (_gameState.faltasVisitante > 0) {
+      _gameState.faltasVisitante--;
+      notifyListeners();
+      _enviarTramaFaltas();
+    }
+  }
+
+  // *** Función para cambiar el periodo ***
   void cambiarPeriodo() {
     _gameState.periodo++;
     _gameState.minutos = 0;
@@ -57,16 +96,15 @@ class GameController extends ChangeNotifier {
     _actualizarTrama();
   }
 
-  /// **Reiniciar marcadores y también el reloj sin afectar el periodo**
+  // *** Función para reiniciar los marcadores y el tiempo ***
   void reiniciarMarcadoresYTiempo() {
     _gameState.marcadorLocal = 0;
     _gameState.marcadorVisitante = 0;
     _gameState.minutos = 0;
     _gameState.segundos = 0;
+    _gameState.faltasLocal = 0;
+    _gameState.faltasVisitante = 0;
     notifyListeners();
     _actualizarTrama();
   }
 }
-
-
-
