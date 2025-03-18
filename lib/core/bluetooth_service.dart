@@ -1,91 +1,136 @@
-import 'dart:async';
-import 'dart:typed_data';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:typed_data';
 
 class BluetoothService extends ChangeNotifier {
-  BluetoothConnection? _connection;
+  fbp.FlutterBluePlus flutterBlue = fbp.FlutterBluePlus();
+  fbp.BluetoothDevice? _dispositivoConectado;
+  fbp.BluetoothCharacteristic? _characteristic;
   bool _isConnected = false;
   bool _bluetoothEnabled = false;
   bool _permissionsGranted = false;
-  BluetoothDevice? _dispositivoConectado;
 
   bool get isConnected => _isConnected;
   bool get bluetoothEnabled => _bluetoothEnabled;
   bool get permissionsGranted => _permissionsGranted;
+  fbp.BluetoothDevice? get dispositivoConectado => _dispositivoConectado;
 
   BluetoothService() {
     _checkBluetoothStatus();
   }
 
+  /// **Verifica si el Bluetooth está activado**
   Future<void> _checkBluetoothStatus() async {
-    bool enabled = (await FlutterBluetoothSerial.instance.isEnabled) ?? false;
-    _bluetoothEnabled = enabled;
+    _bluetoothEnabled = await fbp.FlutterBluePlus.isOn;
     notifyListeners();
   }
 
+  /// **Solicita permisos de Bluetooth en Android 12+**
   Future<void> requestPermissions() async {
-    bool granted = (await FlutterBluetoothSerial.instance.requestEnable()) ?? false;
-    _permissionsGranted = granted;
-    _bluetoothEnabled = granted;
+    if (await Permission.bluetoothScan.request().isGranted &&
+        await Permission.bluetoothConnect.request().isGranted &&
+        await Permission.location.request().isGranted) {
+      _permissionsGranted = true;
+      print("✅ Permisos concedidos");
+    } else {
+      _permissionsGranted = false;
+      print("❌ Permisos denegados");
+    }
+    _bluetoothEnabled = await fbp.FlutterBluePlus.isOn;
     notifyListeners();
   }
 
-  /// **Obtiene los dispositivos emparejados**
-  Future<List<BluetoothDevice>> obtenerDispositivosEmparejados() async {
-    return await FlutterBluetoothSerial.instance.getBondedDevices();
+  /// **Escanea dispositivos BLE cercanos**
+  Stream<List<fbp.ScanResult>> escanearDispositivos() async* {
+    try {
+      fbp.FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
+      yield* fbp.FlutterBluePlus.scanResults;
+    } catch (e) {
+      print("❌ Error al escanear dispositivos: $e");
+    } finally {
+      fbp.FlutterBluePlus.stopScan();
+    }
   }
 
-  /// **Verifica si un dispositivo específico está conectado**
-  bool estaConectado(BluetoothDevice dispositivo) {
-    return _isConnected && _dispositivoConectado?.address == dispositivo.address;
-  }
-
-  /// **Conecta o desconecta un dispositivo según su estado actual**
-  Future<void> conectarODesconectar(BluetoothDevice dispositivo) async {
+  /// **Conectar o desconectar un dispositivo**
+  Future<void> conectarODesconectar(fbp.BluetoothDevice dispositivo) async {
     if (estaConectado(dispositivo)) {
-      desconectar();
+      await desconectar();
     } else {
       await conectarDispositivo(dispositivo);
     }
   }
 
-  /// **Conecta un dispositivo Bluetooth**
-  Future<void> conectarDispositivo(BluetoothDevice device) async {
+  /// **Verifica si un dispositivo está conectado**
+  bool estaConectado(fbp.BluetoothDevice dispositivo) {
+    return _isConnected && _dispositivoConectado?.remoteId == dispositivo.remoteId;
+  }
+
+  /// **Conectar a un dispositivo BLE**
+  Future<void> conectarDispositivo(fbp.BluetoothDevice device) async {
     try {
-      _connection = await BluetoothConnection.toAddress(device.address);
+      print("🔄 Conectando a ${device.platformName}...");
+      await device.connect();
       _dispositivoConectado = device;
       _isConnected = true;
+
+      // **Descubrir servicios y características**
+      List<fbp.BluetoothService> services = await device.discoverServices();
+      for (var service in services) {
+        for (var characteristic in service.characteristics) {
+          if (characteristic.properties.write) {
+            _characteristic = characteristic;
+            break;
+          }
+        }
+      }
+
+      if (_characteristic != null) {
+        print("✅ Característica GATT encontrada");
+      } else {
+        print("⚠️ No se encontró una característica GATT de escritura");
+      }
+
       notifyListeners();
-      print('Conectado a ${device.name}');
+      print('✅ Conectado a ${device.platformName}');
     } catch (e) {
       _isConnected = false;
       _dispositivoConectado = null;
+      print('❌ Error al conectar: $e');
       notifyListeners();
-      print('Error al conectar: $e');
     }
   }
 
-  /// **Envía la trama de datos**
-  void enviarTrama(Uint8List trama) {
-    if (_connection != null && _connection!.isConnected) {
-      _connection!.output.add(trama);
-      _connection!.output.allSent.then((_) {
-        print("Trama enviada: ${trama.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(', ')}");
-      });
+  /// **Enviar datos a través de BLE (GATT)**
+  Future<void> enviarTrama(Uint8List trama) async {
+    if (_isConnected && _characteristic != null) {
+      try {
+        await _characteristic!.write(trama);
+        print("📤 Trama enviada: ${trama.map((b) => '0x${b.toRadixString(16).padLeft(2, '0')}').join(', ')}");
+      } catch (e) {
+        print("❌ Error al enviar trama: $e");
+      }
     } else {
-      print("No hay conexión activa");
+      print("❌ No hay conexión activa o característica GATT no encontrada");
     }
   }
 
-  /// **Desconecta el dispositivo Bluetooth**
-  void desconectar() {
-    _connection?.close();
-    _connection = null;
-    _isConnected = false;
-    _dispositivoConectado = null;
-    notifyListeners();
-    print("Desconectado de Bluetooth");
+  /// **Desconectar dispositivo BLE**
+  Future<void> desconectar() async {
+    if (_dispositivoConectado != null) {
+      try {
+        await _dispositivoConectado!.disconnect();
+        _isConnected = false;
+        _dispositivoConectado = null;
+        _characteristic = null;
+        notifyListeners();
+        print("🔌 Desconectado de Bluetooth");
+      } catch (e) {
+        print("❌ Error al desconectar: $e");
+      }
+    }
   }
 }
+
 

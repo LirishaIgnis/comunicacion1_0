@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import '../core/bluetooth_service.dart';
 
 class BluetoothView extends StatefulWidget {
@@ -9,7 +9,7 @@ class BluetoothView extends StatefulWidget {
 }
 
 class _BluetoothViewState extends State<BluetoothView> {
-  List<BluetoothDevice> _devices = [];
+  List<fbp.ScanResult> _devices = []; // Lista de dispositivos BLE descubiertos
 
   @override
   void initState() {
@@ -17,11 +17,27 @@ class _BluetoothViewState extends State<BluetoothView> {
     _buscarDispositivos();
   }
 
+  /// **Escanea dispositivos BLE cercanos**
   void _buscarDispositivos() async {
-    List<BluetoothDevice> dispositivosEmparejados =
-        await FlutterBluetoothSerial.instance.getBondedDevices();
     setState(() {
-      _devices = dispositivosEmparejados;
+      _devices = []; // Limpiamos la lista antes de escanear
+    });
+
+    fbp.FlutterBluePlus flutterBlue = fbp.FlutterBluePlus();
+
+    // Iniciar el escaneo de dispositivos BLE
+    fbp.FlutterBluePlus.startScan(timeout: Duration(seconds: 5));
+
+    // Escuchar los resultados del escaneo
+    fbp.FlutterBluePlus.scanResults.listen((results) {
+      setState(() {
+        _devices = results; // Almacenar los dispositivos detectados
+      });
+    });
+
+    // Detener escaneo después de 5 segundos
+    Future.delayed(Duration(seconds: 5), () {
+      fbp.FlutterBluePlus.stopScan();
     });
   }
 
@@ -53,18 +69,23 @@ class _BluetoothViewState extends State<BluetoothView> {
               child: Text("Verificar Bluetooth y Permisos"),
             ),
             SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: _buscarDispositivos,
+              child: Text("Escanear Dispositivos BLE"),
+            ),
+            SizedBox(height: 20),
             Expanded(
               child: _devices.isEmpty
                   ? Center(child: CircularProgressIndicator())
                   : ListView.builder(
                       itemCount: _devices.length,
                       itemBuilder: (context, index) {
+                        var device = _devices[index].device;
                         return ListTile(
-                          title:
-                              Text(_devices[index].name ?? "Dispositivo Desconocido"),
-                          subtitle: Text(_devices[index].address),
+                          title: Text(device.platformName ?? "Dispositivo Desconocido"),
+                          subtitle: Text(device.remoteId.toString()),
                           onTap: () {
-                            bluetoothService.conectarDispositivo(_devices[index]);
+                            bluetoothService.conectarDispositivo(device);
                           },
                         );
                       },

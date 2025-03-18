@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import '../controllers/game_controller.dart';
 import '../controllers/time_controller.dart';
 import '../core/bluetooth_service.dart';
-import 'home_view.dart';  // Asegúrate de importar la vista de Home si aún no está
+import 'home_view.dart';  
 
 class GameView extends StatefulWidget {
   @override
@@ -12,22 +12,74 @@ class GameView extends StatefulWidget {
 }
 
 class _GameViewState extends State<GameView> {
-  BluetoothDevice? _selectedDevice;
-  List<BluetoothDevice> _devices = [];
+  fbp.BluetoothDevice? _selectedDevice;
+  List<fbp.ScanResult> _devices = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
-    _fetchPairedDevices();
+    _buscarDispositivos();
   }
 
-  Future<void> _fetchPairedDevices() async {
-    final devices = await FlutterBluetoothSerial.instance.getBondedDevices();
+  /// **Escanea dispositivos BLE cercanos**
+  Future<void> _buscarDispositivos() async {
     setState(() {
-      _devices = devices;
+      _devices = []; // Limpiar la lista antes de escanear
+    });
+
+    fbp.FlutterBluePlus flutterBlue = fbp.FlutterBluePlus();
+
+    fbp.FlutterBluePlus.startScan(timeout: Duration(seconds: 5));
+
+    fbp.FlutterBluePlus.scanResults.listen((results) {
+      setState(() {
+        _devices = results;
+      });
+    });
+
+    Future.delayed(Duration(seconds: 5), () {
+      fbp.FlutterBluePlus.stopScan();
     });
   }
+
+    Widget _buildScoreColumn(String label, int score, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
+    return Column(
+      children: [
+        Text(label, style: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold)),
+        SizedBox(height: 10),
+        Text("$score", style: TextStyle(fontSize: 70, fontWeight: FontWeight.bold, color: color)),
+        SizedBox(height: 15),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: onIncrease,
+              child: Text("+", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                padding: EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+              ),
+            ),
+            SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: onDecrease,
+              child: Text("-", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.grey[800],
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                padding: EdgeInsets.symmetric(horizontal: 25, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +107,6 @@ class _GameViewState extends State<GameView> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Sección del reloj (Tiempo)
             Text(
               "${timeController.gameState.minutos}:${timeController.gameState.segundos.toString().padLeft(2, '0')}",
               style: TextStyle(fontSize: 80, fontWeight: FontWeight.bold, color: Colors.white),
@@ -107,38 +158,13 @@ class _GameViewState extends State<GameView> {
                 ),
               ],
             ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Flexible(
-                  child: _buildFoulsColumn(
-                    "Faltas Local",
-                    gameController.gameState.faltasLocal,
-                    Colors.blue,
-                    gameController.aumentarFaltasLocal,
-                    gameController.disminuirFaltasLocal,
-                  ),
-                ),
-                Flexible(
-                  child: _buildFoulsColumn(
-                    "Faltas Visitante",
-                    gameController.gameState.faltasVisitante,
-                    Colors.red,
-                    gameController.aumentarFaltasVisitante,
-                    gameController.disminuirFaltasVisitante,
-                  ),
-                ),
-              ],
-            ),
             SizedBox(height: 30),
             _buildTimeControlButtons(timeController, gameController),
           ],
         ),
       ),
-      // FloatingActionButton para regresar al Home
       floatingActionButton: FloatingActionButton(
-        heroTag: "homeButton",  // Importante para evitar conflictos de hero animations
+        heroTag: "homeButton",
         onPressed: () {
           Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => HomeView()));
         },
@@ -148,6 +174,7 @@ class _GameViewState extends State<GameView> {
     );
   }
 
+  /// **Construye el menú de Bluetooth**
   Widget _buildBluetoothMenu(BluetoothService bluetoothService) {
     return Drawer(
       child: Container(
@@ -159,13 +186,14 @@ class _GameViewState extends State<GameView> {
             Text("Dispositivos Bluetooth",
                 style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             SizedBox(height: 10),
-            DropdownButtonFormField<BluetoothDevice>(
+            DropdownButtonFormField<fbp.BluetoothDevice>(
               dropdownColor: Colors.grey[850],
               value: _selectedDevice,
-              items: _devices.map((device) {
+              items: _devices.map((scanResult) {
+                var device = scanResult.device;
                 return DropdownMenuItem(
                   value: device,
-                  child: Text(device.name ?? "Desconocido", style: TextStyle(color: Colors.white)),
+                  child: Text(device.platformName ?? "Desconocido", style: TextStyle(color: Colors.white)),
                 );
               }).toList(),
               onChanged: (device) {
@@ -196,80 +224,6 @@ class _GameViewState extends State<GameView> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildScoreColumn(String label, int score, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold)),
-        SizedBox(height: 10),
-        Text("$score", style: TextStyle(fontSize: 70, fontWeight: FontWeight.bold, color: color)),
-        SizedBox(height: 15),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: onIncrease,
-              child: Text("+", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-              ),
-            ),
-            SizedBox(width: 10),
-            ElevatedButton(
-              onPressed: onDecrease,
-              child: Text("-", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[800],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildFoulsColumn(String label, int fouls, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold)),
-        SizedBox(height: 10),
-        Text("$fouls", style: TextStyle(fontSize: 50, fontWeight: FontWeight.bold, color: color)),
-        SizedBox(height: 10),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: onIncrease,
-              child: Text("+", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-            ),
-            SizedBox(width: 10),
-            ElevatedButton(
-              onPressed: onDecrease,
-              child: Text("-", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[800],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 

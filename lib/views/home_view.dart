@@ -47,12 +47,35 @@ class _HomeViewState extends State<HomeView> {
             SizedBox(height: 10),
             ElevatedButton(
               onPressed: () {
-                // Convertimos el texto a Uint8List antes de enviarlo
                 Uint8List mensajeEnBytes = Uint8List.fromList(_textController.text.codeUnits);
                 bluetoothService.enviarTrama(mensajeEnBytes);
                 _textController.clear();
               },
               child: Text("Enviar Mensaje"),
+            ),
+            SizedBox(height: 20),
+
+            // Botón para enviar la primera trama
+            ElevatedButton(
+              onPressed: () {
+                Uint8List trama1 = Uint8List.fromList([
+                  0xAA, 0xAB, 0xAC, 0x06, 0x59, 0x98, 0x08, 0x05, 0x11, 0x34, 0x24, 0xAD
+                ]);
+                bluetoothService.enviarTrama(trama1);
+              },
+              child: Text("Enviar Trama 1"),
+            ),
+            SizedBox(height: 10),
+
+            // Botón para enviar la segunda trama
+            ElevatedButton(
+              onPressed: () {
+                Uint8List trama2 = Uint8List.fromList([
+                  0xAA, 0xAB, 0xAC, 0x02, 0x59, 0x98, 0x08, 0x05, 0x11, 0x34, 0x24, 0xAD
+                ]);
+                bluetoothService.enviarTrama(trama2);
+              },
+              child: Text("Enviar Trama 2"),
             ),
           ],
         ),
@@ -60,6 +83,3 @@ class _HomeViewState extends State<HomeView> {
     );
   }
 }
-
-
-
