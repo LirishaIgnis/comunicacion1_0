@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
+import 'dart:async';
 import '../controllers/game_controller.dart';
 import '../controllers/time_controller.dart';
 import '../core/bluetooth_service.dart';
-import 'home_view.dart';  
+import 'home_view.dart';
 
 class GameView extends StatefulWidget {
   @override
@@ -15,71 +16,34 @@ class _GameViewState extends State<GameView> {
   fbp.BluetoothDevice? _selectedDevice;
   List<fbp.ScanResult> _devices = [];
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  StreamSubscription? _scanSubscription;
 
   @override
   void initState() {
     super.initState();
-    _buscarDispositivos();
+    _iniciarEscaneo();
   }
 
-  /// **Escanea dispositivos BLE cercanos**
-  Future<void> _buscarDispositivos() async {
-    setState(() {
-      _devices = []; // Limpiar la lista antes de escanear
-    });
+  /// **Suscribirse al escaneo de dispositivos desde `BluetoothService`**
+  void _iniciarEscaneo() {
+    final bluetoothService = Provider.of<BluetoothService>(context, listen: false);
+    _scanSubscription?.cancel(); // Cancelar escaneo previo si existe
 
-    fbp.FlutterBluePlus flutterBlue = fbp.FlutterBluePlus();
-
-    fbp.FlutterBluePlus.startScan(timeout: Duration(seconds: 5));
-
-    fbp.FlutterBluePlus.scanResults.listen((results) {
-      setState(() {
-        _devices = results;
-      });
-    });
-
-    Future.delayed(Duration(seconds: 5), () {
-      fbp.FlutterBluePlus.stopScan();
+    _scanSubscription = bluetoothService.escanearDispositivos().listen((results) {
+      if (mounted) {
+        setState(() {
+          _devices = results;
+        });
+      }
     });
   }
 
-    Widget _buildScoreColumn(String label, int score, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
-    return Column(
-      children: [
-        Text(label, style: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold)),
-        SizedBox(height: 10),
-        Text("$score", style: TextStyle(fontSize: 70, fontWeight: FontWeight.bold, color: color)),
-        SizedBox(height: 15),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            ElevatedButton(
-              onPressed: onIncrease,
-              child: Text("+", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-              ),
-            ),
-            SizedBox(width: 10),
-            ElevatedButton(
-              onPressed: onDecrease,
-              child: Text("-", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.grey[800],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                padding: EdgeInsets.symmetric(horizontal: 25, vertical: 10),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
+  /// **Cancelar escaneo al salir de GameView**
+  @override
+  void dispose() {
+    _scanSubscription?.cancel(); // Cancela la suscripción al escaneo
+    super.dispose();
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -227,43 +191,44 @@ class _GameViewState extends State<GameView> {
     );
   }
 
-  Widget _buildTimeControlButtons(TimeController timeController, GameController gameController) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+  /// **Construye una columna para los puntajes**
+  Widget _buildScoreColumn(String label, int score, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {
+    return Column(
       children: [
-        ElevatedButton(
-          onPressed: timeController.iniciarTiempo,
-          child: Text("Iniciar", style: TextStyle(fontSize: 20)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.green,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-          ),
-        ),
-        SizedBox(width: 15),
-        ElevatedButton(
-          onPressed: timeController.pausarTiempo,
-          child: Text("Pausar", style: TextStyle(fontSize: 20)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.orange,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-          ),
-        ),
-        SizedBox(width: 15),
-        ElevatedButton(
-          onPressed: gameController.reiniciarMarcadoresYTiempo,
-          child: Text("Reiniciar", style: TextStyle(fontSize: 20)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.red,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-          ),
+        Text(label, style: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold)),
+        SizedBox(height: 10),
+        Text("$score", style: TextStyle(fontSize: 70, fontWeight: FontWeight.bold, color: color)),
+        SizedBox(height: 15),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ElevatedButton(
+              onPressed: onIncrease,
+              child: Text("+", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+            ),
+            SizedBox(width: 10),
+            ElevatedButton(
+              onPressed: onDecrease,
+              child: Text("-", style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
+            ),
+          ],
         ),
       ],
     );
   }
+
+  /// **Construye los botones para el control del tiempo**
+  Widget _buildTimeControlButtons(TimeController timeController, GameController gameController) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        ElevatedButton(onPressed: timeController.iniciarTiempo, child: Text("Iniciar")),
+        SizedBox(width: 15),
+        ElevatedButton(onPressed: timeController.pausarTiempo, child: Text("Pausar")),
+        SizedBox(width: 15),
+        ElevatedButton(onPressed: gameController.reiniciarMarcadoresYTiempo, child: Text("Reiniciar")),
+      ],
+    );
+  }
 }
+

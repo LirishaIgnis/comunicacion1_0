@@ -2,6 +2,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart' as fbp;
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:typed_data';
+import 'dart:async';
 
 class BluetoothService extends ChangeNotifier {
   fbp.FlutterBluePlus flutterBlue = fbp.FlutterBluePlus();
@@ -10,6 +11,9 @@ class BluetoothService extends ChangeNotifier {
   bool _isConnected = false;
   bool _bluetoothEnabled = false;
   bool _permissionsGranted = false;
+
+  StreamController<List<fbp.ScanResult>> _scanController = StreamController.broadcast();
+  StreamSubscription? _scanSubscription;
 
   bool get isConnected => _isConnected;
   bool get bluetoothEnabled => _bluetoothEnabled;
@@ -42,15 +46,33 @@ class BluetoothService extends ChangeNotifier {
   }
 
   /// **Escanea dispositivos BLE cercanos**
-  Stream<List<fbp.ScanResult>> escanearDispositivos() async* {
+  Stream<List<fbp.ScanResult>> escanearDispositivos() {
+    if (_isConnected) {
+      print("⚠️ No se inicia el escaneo porque hay un dispositivo conectado.");
+      return Stream.empty(); // No escanea si ya hay una conexión
+    }
+
     try {
+      print("🔍 Iniciando escaneo de dispositivos...");
       fbp.FlutterBluePlus.startScan(timeout: const Duration(seconds: 5));
-      yield* fbp.FlutterBluePlus.scanResults;
+
+      _scanSubscription?.cancel();
+      _scanSubscription = fbp.FlutterBluePlus.scanResults.listen((results) {
+        if (!_scanController.isClosed) {
+          _scanController.add(results);
+        }
+      });
     } catch (e) {
       print("❌ Error al escanear dispositivos: $e");
-    } finally {
-      fbp.FlutterBluePlus.stopScan();
     }
+
+    return _scanController.stream;
+  }
+
+  /// **Detener escaneo y liberar memoria**
+  void detenerEscaneo() {
+    print("🛑 Deteniendo escaneo...");
+    _scanSubscription?.cancel();
   }
 
   /// **Conectar o desconectar un dispositivo**
@@ -70,7 +92,12 @@ class BluetoothService extends ChangeNotifier {
   /// **Conectar a un dispositivo BLE**
   Future<void> conectarDispositivo(fbp.BluetoothDevice device) async {
     try {
-      print("🔄 Conectando a ${device.platformName}...");
+      print("🔄 Conectando a ${device.platformName.isNotEmpty ? device.platformName : device.remoteId}...");
+
+      // **Detener escaneo antes de conectar**
+      detenerEscaneo();
+      fbp.FlutterBluePlus.stopScan();
+
       await device.connect();
       _dispositivoConectado = device;
       _isConnected = true;
@@ -93,7 +120,7 @@ class BluetoothService extends ChangeNotifier {
       }
 
       notifyListeners();
-      print('✅ Conectado a ${device.platformName}');
+      print('✅ Conectado a ${device.platformName.isNotEmpty ? device.platformName : device.remoteId}');
     } catch (e) {
       _isConnected = false;
       _dispositivoConectado = null;
@@ -120,17 +147,24 @@ class BluetoothService extends ChangeNotifier {
   Future<void> desconectar() async {
     if (_dispositivoConectado != null) {
       try {
+        print("🔌 Desconectando...");
         await _dispositivoConectado!.disconnect();
         _isConnected = false;
         _dispositivoConectado = null;
         _characteristic = null;
         notifyListeners();
-        print("🔌 Desconectado de Bluetooth");
+        print("✅ Desconectado correctamente.");
       } catch (e) {
         print("❌ Error al desconectar: $e");
       }
     }
   }
+
+  /// **Liberar recursos al cerrar la aplicación**
+  @override
+  void dispose() {
+    detenerEscaneo();
+    _scanController.close();
+    super.dispose();
+  }
 }
-
-
