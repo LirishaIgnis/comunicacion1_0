@@ -54,7 +54,7 @@ class _GameViewState extends State<GameView> {
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        backgroundColor: Colors.blueGrey[900],
+        backgroundColor: const Color.fromARGB(255, 15, 151, 219),
         title: Text("Marcador", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
         centerTitle: true,
         leading: IconButton(
@@ -140,56 +140,63 @@ class _GameViewState extends State<GameView> {
 
   /// **Construye el menú de Bluetooth**
   Widget _buildBluetoothMenu(BluetoothService bluetoothService) {
-    return Drawer(
-      child: Container(
-        color: Colors.blueGrey[800],
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Dispositivos Bluetooth",
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-            SizedBox(height: 10),
-            DropdownButtonFormField<fbp.BluetoothDevice>(
-              dropdownColor: Colors.grey[850],
-              value: _selectedDevice,
-              items: _devices.map((scanResult) {
-                var device = scanResult.device;
-                return DropdownMenuItem(
-                  value: device,
-                  child: Text(device.platformName ?? "Desconocido", style: TextStyle(color: Colors.white)),
-                );
-              }).toList(),
-              onChanged: (device) {
-                setState(() {
-                  _selectedDevice = device;
-                });
-              },
-              decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.grey[700],
-                labelText: "Seleccionar dispositivo",
-                labelStyle: TextStyle(color: Colors.white),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
+  return Drawer(
+    child: Container(
+      color: Colors.blueGrey[800],
+      padding: EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Dispositivos Bluetooth",
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          SizedBox(height: 10),
+          DropdownButtonFormField<fbp.BluetoothDevice>(
+            dropdownColor: Colors.grey[850],
+            value: _selectedDevice,
+            items: _devices.map((scanResult) {
+              var device = scanResult.device;
+              var name = scanResult.advertisementData.localName;
+              return DropdownMenuItem(
+                value: device,
+                child: Text(
+                  name.isNotEmpty ? name : device.remoteId.str,
+                  style: TextStyle(color: Colors.white),
+                ),
+              );
+            }).toList(),
+            onChanged: (device) {
+              setState(() {
+                _selectedDevice = device;
+              });
+            },
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey[700],
+              labelText: "Seleccionar dispositivo",
+              labelStyle: TextStyle(color: Colors.white),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
             ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: _selectedDevice != null
-                  ? () => bluetoothService.conectarODesconectar(_selectedDevice!)
-                  : null,
-              child: Text(bluetoothService.isConnected ? "Desconectar" : "Conectar",
-                  style: TextStyle(fontSize: 18)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: bluetoothService.isConnected ? Colors.red : Colors.green,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-              ),
+          ),
+          SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: _selectedDevice != null
+                ? () => bluetoothService.conectarODesconectar(_selectedDevice!)
+                : null,
+            child: Text(
+              bluetoothService.isConnected ? "Desconectar" : "Conectar",
+              style: TextStyle(fontSize: 18),
             ),
-          ],
-        ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: bluetoothService.isConnected ? Colors.red : Colors.green,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   /// **Construye una columna para los puntajes**
   Widget _buildScoreColumn(String label, int score, Color color, VoidCallback onIncrease, VoidCallback onDecrease) {

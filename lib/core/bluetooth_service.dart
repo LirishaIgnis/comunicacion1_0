@@ -12,6 +12,8 @@ class BluetoothService extends ChangeNotifier {
   bool _bluetoothEnabled = false;
   bool _permissionsGranted = false;
 
+  String? _nombreDispositivoConectado; // ✅ Nuevo: guarda el nombre real leído del advertisement
+
   StreamController<List<fbp.ScanResult>> _scanController = StreamController.broadcast();
   StreamSubscription? _scanSubscription;
 
@@ -19,6 +21,13 @@ class BluetoothService extends ChangeNotifier {
   bool get bluetoothEnabled => _bluetoothEnabled;
   bool get permissionsGranted => _permissionsGranted;
   fbp.BluetoothDevice? get dispositivoConectado => _dispositivoConectado;
+
+  /// ✅ Getter para mostrar el nombre del dispositivo conectado en la UI
+  String get nombreDispositivoConectado =>
+      _nombreDispositivoConectado ??
+      _dispositivoConectado?.platformName ??
+      _dispositivoConectado?.remoteId.str ??
+      "Desconocido";
 
   BluetoothService() {
     _checkBluetoothStatus();
@@ -92,7 +101,11 @@ class BluetoothService extends ChangeNotifier {
   /// **Conectar a un dispositivo BLE**
   Future<void> conectarDispositivo(fbp.BluetoothDevice device) async {
     try {
-      print("🔄 Conectando a ${device.platformName.isNotEmpty ? device.platformName : device.remoteId}...");
+      // ✅ Guardamos el nombre desde advertising si estuviera disponible
+      final scanResult = await _buscarScanResultPorDevice(device);
+      _nombreDispositivoConectado = scanResult?.advertisementData.localName;
+
+      print("🔁 Conectando a ${_nombreDispositivoConectado ?? device.platformName ?? device.remoteId}...");
 
       // **Detener escaneo antes de conectar**
       detenerEscaneo();
@@ -120,12 +133,39 @@ class BluetoothService extends ChangeNotifier {
       }
 
       notifyListeners();
-      print('✅ Conectado a ${device.platformName.isNotEmpty ? device.platformName : device.remoteId}');
+      print('✅ Conectado a $nombreDispositivoConectado');
     } catch (e) {
       _isConnected = false;
       _dispositivoConectado = null;
       print('❌ Error al conectar: $e');
       notifyListeners();
+    }
+  }
+
+  /// ✅ Busca el último ScanResult con info del dispositivo
+  Future<fbp.ScanResult?> _buscarScanResultPorDevice(fbp.BluetoothDevice device) async {
+    final resultsList = await fbp.FlutterBluePlus.scanResults.first;
+    try {
+      return resultsList.firstWhere(
+        (result) => result.device.remoteId == device.remoteId,
+      );
+    } catch (e) {
+      // En caso de que no se encuentre, crear un ScanResult manual con advertencia
+      print("⚠️ ScanResult no encontrado para el dispositivo ${device.remoteId}");
+      return fbp.ScanResult(
+        device: device,
+        advertisementData:  fbp.AdvertisementData(
+          advName: "",
+          txPowerLevel: null,
+          appearance: 0,
+          connectable: false,
+          manufacturerData: {},
+          serviceData: {},
+          serviceUuids: [],
+        ),
+        rssi: 0,
+        timeStamp: DateTime.now(),
+      );
     }
   }
 
